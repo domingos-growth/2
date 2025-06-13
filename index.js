@@ -1,11 +1,14 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const axios = require('axios');
 const v8n = require('v8n');
 
 const app = express();
 app.use(bodyParser.json());
 
 const verifyToken = 'domingos2025';
+const openAiKey = 'SUA_API_KEY_DA_OPENAI_AQUI';
+const whatsappToken = 'SEU_TOKEN_DO_WHATSAPP_AQUI';
 
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -13,31 +16,61 @@ app.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === verifyToken) {
-    console.log('🔗 Webhook verificado com sucesso!');
     res.status(200).send(challenge);
   } else {
     res.sendStatus(403);
   }
 });
 
-app.post('/webhook', (req, res) => {
-  const body = req.body;
-  console.log('📥 Recebido:', JSON.stringify(body, null, 2));
+app.post('/webhook', async (req, res) => {
+  const entry = req.body.entry?.[0];
+  const change = entry?.changes?.[0];
+  const message = change?.value?.messages?.[0];
+  const phoneNumberId = change?.value?.metadata?.phone_number_id;
 
-  try {
-    const nome = body.nome || '';
-    v8n().string().minLength(3).check(nome);
-    console.log('✅ Nome válido:', nome);
-  } catch (err) {
-    console.error('❌ Nome inválido:', err.message);
+  if (message?.text?.body) {
+    const userText = message.text.body;
+    const from = message.from;
+
+    console.log("📩 Mensagem recebida:", userText);
+
+    try {
+      v8n().string().minLength(1).check(userText);
+
+      const gptResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "Você é um assistente virtual da Domingos Growth no WhatsApp. Responda de forma objetiva, educada e profissional." },
+          { role: "user", content: userText }
+        ]
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAiKey}`
+        }
+      });
+
+      const respostaIA = gptResponse.data.choices[0].message.content;
+      console.log('🤖 Resposta da IA:', respostaIA);
+
+      await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+        messaging_product: "whatsapp",
+        to: from,
+        text: { body: respostaIA }
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${whatsappToken}`
+        }
+      });
+
+    } catch (err) {
+      console.error('Erro ao processar a mensagem:', err.message);
+    }
   }
 
   res.sendStatus(200);
 });
 
-app.get('/', (req, res) => {
-  res.send('🚀 Webhook Domingos Growth com validação V8n funcionando!');
-});
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🔥 Rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT-4 rodando na porta ${PORT}`));
