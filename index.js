@@ -33,14 +33,14 @@ app.post('/webhook', async (req, res) => {
     console.log("📩 Mensagem recebida:", message.text.body);
 
     try {
-      await axios.post(\`https://graph.facebook.com/v17.0/\${phoneNumberId}/messages`, {
+      await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
         messaging_product: "whatsapp",
         to: from,
         text: { body: "✅ Recebido com sucesso! 🚀" }
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': \`Bearer \${whatsappToken}\`
+          'Authorization': `Bearer ${whatsappToken}`
         }
       });
 
@@ -54,4 +54,5 @@ app.post('/webhook', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(\`🔥 Webhook básico rodando na porta \${PORT}`));
+app.listen(PORT, () => console.log(`🔥 Webhook básico rodando na porta ${PORT}`));
+
