@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 
 const verifyToken = 'domingos2025';
 const whatsappToken = process.env.WHATSAPP_TOKEN;
-const openAiKey = process.env.OPENAI_API_KEY;
+const openaiKey = process.env.OPENAI_API_KEY;
 
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -29,36 +29,31 @@ app.post('/webhook', async (req, res) => {
   const message = change?.value?.messages?.[0];
   const phoneNumberId = change?.value?.metadata?.phone_number_id;
   const from = message?.from;
+  const body = message?.text?.body;
 
-  if (message?.text?.body) {
-    const userText = message.text.body;
-    console.log("📩 Mensagem recebida:", userText);
+  if (body) {
+    console.log("📩 Mensagem recebida:", body);
 
     try {
-      const gptResponse = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: 'Você é um assistente da Domingos Growth. Responda de forma profissional, objetiva e humanizada.' },
-            { role: 'user', content: userText }
-          ]
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${openAiKey}`,
-            'Content-Type': 'application/json'
-          }
+      // ENVIA PARA OPENAI
+      const gptResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: body }],
+        temperature: 0.7
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiKey}`
         }
-      );
+      });
 
-      const respostaIA = gptResponse.data.choices[0].message.content;
-      console.log("🤖 Resposta da IA:", respostaIA);
+      const reply = gptResponse.data.choices[0].message.content;
 
+      // ENVIA PARA WHATSAPP
       await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
         messaging_product: "whatsapp",
         to: from,
-        text: { body: respostaIA }
+        text: { body: reply }
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -66,14 +61,15 @@ app.post('/webhook', async (req, res) => {
         }
       });
 
+      console.log("✅ Resposta enviada com sucesso!");
     } catch (error) {
-      console.error("❌ Erro no processamento da IA ou envio:", error.response?.data || error.message);
+      console.error("❌ Erro ao gerar ou enviar resposta:", error.response?.data || error.message);
     }
   }
 
   res.sendStatus(200);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🔥 Webhook rodando na porta ${PORT}`));
 
