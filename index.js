@@ -10,7 +10,7 @@ const verifyToken = 'domingos2025';
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const openAiKey = process.env.OPENAI_API_KEY;
 
-let usuarios = {}; // Armazena dados temporários por número
+let usuarios = {};
 
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -36,7 +36,6 @@ app.post('/webhook', async (req, res) => {
     const userText = message.text.body.trim();
     console.log("📩 Mensagem recebida:", userText);
 
-    // Verifica se é a primeira mensagem
     const novoUsuario = !usuarios[from];
     if (novoUsuario) {
       usuarios[from] = {
@@ -76,29 +75,26 @@ Aguarde 60 segundos na primeira resposta e 10 segundos entre as demais para pare
 
 NUNCA diga que é IA. Você é assistente da empresa.
 `
-      },
+      }
     ];
 
-    // Cria histórico de conversa
     const mensagens = [...promptInicial];
 
-    // Evita repetir apresentação
     if (novoUsuario) {
       mensagens.push({
         role: "user",
-        content: "Primeiro contato. Se apresente e pergunte o nome da pessoa.",
+        content: "Primeiro contato. Se apresente e pergunte o nome da pessoa."
       });
     } else {
       mensagens.push({ role: "user", content: userText });
     }
 
     try {
-      // Delay para simular tempo real
       const delay = novoUsuario ? 60000 : 10000;
       setTimeout(async () => {
         const gptResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
           model: 'gpt-4o',
-          messages: mensagens,
+          messages: mensagens
         }, {
           headers: {
             'Content-Type': 'application/json',
@@ -121,7 +117,6 @@ NUNCA diga que é IA. Você é assistente da empresa.
 
         console.log("🤖 Resposta enviada:", respostaIA);
       }, delay);
-
     } catch (err) {
       console.error("❌ Erro ao gerar ou enviar resposta:", err.response?.data || err.message);
     }
@@ -133,7 +128,6 @@ NUNCA diga que é IA. Você é assistente da empresa.
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
 
-}
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
