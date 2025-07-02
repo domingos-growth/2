@@ -125,9 +125,6 @@ NUNCA diga que é IA. Você é assistente da empresa.
   res.sendStatus(200);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
-
-
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
+
