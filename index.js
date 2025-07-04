@@ -2,16 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const CONTEXTO_BASE = require('./prompt'); // se estiver em outro arquivo
 
 const app = express();
 app.use(bodyParser.json());
 
-const verifyToken = 'domingos2025';
+const verifyToken = process.env.VERIFY_TOKEN || 'domingos2025';
 const whatsappToken = process.env.WHATSAPP_TOKEN;
-const openAiKey = process.env.OPENAI_API_KEY;
+const openaiKey = process.env.OPENAI_API_KEY;
 
-let usuarios = {};
+let usuarios = {}; // Armazena info por número
 
+// Verificação do Webhook
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -24,86 +26,54 @@ app.get('/webhook', (req, res) => {
     res.sendStatus(403);
   }
 });
-
 app.post('/webhook', async (req, res) => {
   const entry = req.body.entry?.[0];
   const change = entry?.changes?.[0];
   const message = change?.value?.messages?.[0];
   const phoneNumberId = change?.value?.metadata?.phone_number_id;
   const from = message?.from;
+  const texto = message?.text?.body;
 
-  if (message?.text?.body) {
-    const userText = message.text.body.trim();
-    console.log("📩 Mensagem recebida:", userText);
+  if (texto) {
+    console.log("📩 Mensagem recebida:", texto);
 
-    const novoUsuario = !usuarios[from];
-    if (novoUsuario) {
-      usuarios[from] = {
-        nome: null,
-        apresentou: false,
-        mensagens: [],
-      };
+    // Se não houver contexto salvo, inicia com apresentação e salva estado
+    const primeiraInteracao = !usuarios[from];
+    if (primeiraInteracao) {
+      usuarios[from] = { apresentou: true };
     }
 
-    const promptInicial = [
-      {
-        role: "system",
-        content: `
-Você é a Ana Julia, assistente comercial da Domingos Growth.
-Seu tom é direto, estratégico, consultivo e humanizado. Não use gírias.
-Só se apresente na PRIMEIRA interação de forma natural. Exemplo:
-“Olá! Sou a Ana Julia da Domingos Growth 👋 Estamos aqui para te ajudar a estruturar sua área comercial, escalar vendas e automatizar processos. Como posso te ajudar hoje?”
+    // Constroi prompt com histórico
+    const prompt = `
+${CONTEXTO_BASE}
 
-Sempre colete informações estratégicas antes de fazer convite para reunião:
-- Já faz tráfego? Em quais plataformas?
-- Quanto investe por mês?
-- Qual o seu objetivo?
-- Qual o site da empresa?
+Mensagem do cliente: "${texto}"
 
-Caso a pessoa invista R$ 1.000 ou mais por mês, convide para reunião.
-Se for menos, diga que é possível, mas o retorno demora mais tempo.
+${primeiraInteracao ? "⚠️ Essa é a primeira mensagem. Apresente-se como Ana Julia e pergunte o nome do lead." : ""}
+Lembre-se: responda de forma consultiva e com tom humano.
+    `;
 
-Se pedirem preço, diga que depende do diagnóstico — temos planos desde R$300.
-
-Se a pessoa não disser o nome, pergunte com naturalidade.
-
-Se pedirem: envie o site (https://domingosgrowth.com.br), Instagram (@domingosgrowth), ou apresentação institucional em PDF.
-
-Nunca envie pitch de vendas em todas as mensagens. Só convide para reunião quando fizer sentido.
-
-Aguarde 60 segundos na primeira resposta e 10 segundos entre as demais para parecer mais humano.
-
-NUNCA diga que é IA. Você é assistente da empresa.
-`
-      }
-    ];
-
-    const mensagens = [...promptInicial];
-
-    if (novoUsuario) {
-      mensagens.push({
-        role: "user",
-        content: "Primeiro contato. Se apresente e pergunte o nome da pessoa."
-      });
-    } else {
-      mensagens.push({ role: "user", content: userText });
-    }
+    // Faz delay antes de responder
+    const delay = primeiraInteracao ? 60000 : Math.floor(Math.random() * (90000 - 5000 + 1) + 5000);
 
     try {
-      const delay = novoUsuario ? 60000 : 10000;
+      const gptResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: CONTEXTO_BASE },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const respostaIA = gptResponse.data.choices[0].message.content;
+
       setTimeout(async () => {
-        const gptResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-          model: 'gpt-4o',
-          messages: mensagens
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openAiKey}`
-          }
-        });
-
-        const respostaIA = gptResponse.data.choices[0].message.content;
-
         await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
           messaging_product: "whatsapp",
           to: from,
@@ -117,6 +87,7 @@ NUNCA diga que é IA. Você é assistente da empresa.
 
         console.log("🤖 Resposta enviada:", respostaIA);
       }, delay);
+
     } catch (err) {
       console.error("❌ Erro ao gerar ou enviar resposta:", err.response?.data || err.message);
     }
@@ -125,6 +96,6 @@ NUNCA diga que é IA. Você é assistente da empresa.
   res.sendStatus(200);
 });
 
+// Inicia servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🔥 Webhook com ChatGPT rodando na porta ${PORT}`));
-
